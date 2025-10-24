@@ -44,6 +44,8 @@ typedef struct list_elem {
     /* vars for a non-posix DAOS copy */
     uint64_t obj_id_lo;
     uint64_t obj_id_hi;
+    /* 文件的数据布局信息 */
+    mfu_file_layout_t *layout;
 } elem_t;
 
 /* holds an array of objects: users, groups, or file data */

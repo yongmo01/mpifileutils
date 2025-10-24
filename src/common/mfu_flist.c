@@ -18,6 +18,8 @@
 #include <time.h> /* asctime / localtime */
 #include <regex.h>
 
+
+
 /* These headers are needed to query the Lustre MDS for stat
  * information.  This information may be incomplete, but it
  * is faster than a normal stat, which requires communication
@@ -354,6 +356,7 @@ static void list_insert_copy(flist_t* flist, elem_t* src)
 }
 
 /* insert a file given its mode and optional stat data */
+/* 将文件插入到列表中，给定其模式和可选的状态数据 */
 void mfu_flist_insert_stat(flist_t* flist, const char* fpath, mode_t mode, const struct stat* sb)
 {
     /* create new element to record file path, file type, and stat info */
@@ -391,6 +394,11 @@ void mfu_flist_insert_stat(flist_t* flist, const char* fpath, mode_t mode, const
         elem->size  = (uint64_t) sb->st_size;
 
         /* TODO: link to user and group names? */
+
+        /* 我的修改 */
+        /* 获取文件的布局信息 */
+        mfu_file_get_layout(fpath, &elem->layout);
+        
     }
     else {
         elem->detail = 0;

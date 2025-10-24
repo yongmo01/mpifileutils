@@ -1,3 +1,5 @@
+/* This code is used to test how long it takes for 
+DCP to generate a list of files after traversing the entire tree. */
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
@@ -548,16 +550,18 @@ int main(int argc, char** argv)
             mfu_flist_free(&input_flist);
         }
 
+
         /* copy flist into destination */ 
-        /* 重点修改处（文件拷贝）*/
-        rc = mfu_flist_copy(flist, numpaths_src, paths,
+        /* 重点修改处（文件拷贝）; only walk*/
+        /* rc = mfu_flist_copy(flist, numpaths_src, paths,
                             destpath, mfu_copy_opts, mfu_src_file,
                             mfu_dst_file);
         if (rc < 0) {
-            /* hit some sort of error during copy */
+             hit some sort of error during copy 
             rc = 1;
-        }
-        
+        } 
+        */
+
 
         /* free the path parameters */
         mfu_param_path_free_all(numpaths, paths);
