@@ -66,7 +66,7 @@ typedef void (*CIRCLE_cb_reduce_fini_fn)(const void* buf, size_t size);
  * Initialize internal state needed by libcircle. This should be called before
  * any other libcircle API call. This returns the MPI rank value.
  */
-int CIRCLE_init(int argc, char* argv[], int options);
+int CIRCLE_init(int argc, char* argv[], int options,MPI_Comm custom_comm);
 
 /**
  * Change run time flags

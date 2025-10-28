@@ -1,48 +1,181 @@
 #include "my_common.h"
 
 /*----配置文件相关接口-------*/
-static int env_int(const char* k, int dflt){
-  const char* v=getenv(k); if (!v) return dflt; char* e; long x=strtol(v,&e,10); return (e==v)?dflt:(int)x;
+config_env_t config_env;//
+/* 辅助函数：去除字符串首尾的空白字符，并放回修改后的字符串头尾指针 */
+static char* trim_whitespace(char* str) {
+  /* 如果str为空指针，返回NULL */
+  if(str == NULL) return NULL;
+  if(strlen(str) == 0) return str;
+  while (isspace((unsigned char)*str)) str++;// 从头部开始去除空白
+  if (*str == 0) return str;// 如果全是空白，返回空字符串
+  char* end;
+  end = str + strlen(str) - 1;// 计算尾部位置
+  while (end > str && isspace((unsigned char)*end)) end--;// 从尾部开始去除空白
+  end[1] = '\0';// 通过添加字符串结束符来截断字符串，但不是真正的截断字符
+  return str;
 }
+/* 辅助函数：将字符串键映射到枚举值 */
+static config_key_t map_key_to_enum(const char* key) {
+    if (strcmp(key, "NUM_P") == 0) return KEY_NUM_P;
+    if (strcmp(key, "NUM_Q") == 0) return KEY_NUM_Q;
+    if (strcmp(key, "NUM_C") == 0) return KEY_NUM_C;
+    if (strcmp(key, "SOURCE_PATH") == 0) return KEY_SOURCE_PATH;
+    if (strcmp(key, "TARGET_PATH") == 0) return KEY_TARGET_PATH;
+    if (strcmp(key, "NUM_SOURCE_MDT") == 0) return KEY_NUM_SOURCE_MDT;
+    if (strcmp(key, "NUM_SOURCE_OST") == 0) return KEY_NUM_SOURCE_OST;
+    if (strcmp(key, "NUM_TARGET_MDT") == 0) return KEY_NUM_TARGET_MDT;
+    if (strcmp(key, "NUM_TARGET_OST") == 0) return KEY_NUM_TARGET_OST;
+    if (strcmp(key, "CAP_RING") == 0) return KEY_CAP_RING;
+    if (strcmp(key, "TIME_WRITE") == 0) return KEY_TIME_WRITE;
+    if (strcmp(key, "TIME_READ") == 0) return KEY_TIME_READ;
+    return KEY_UNKNOWN;
+}
+/* 辅助函数：解析一行 " key = value # comment" 格式的配置行 */
+static void parse_config_line(config_env_t* config, char* line) {
+  char* key, * value, * separator;// 分离键和值的指针
+  /* 忽略注释行和空行 */
+  if (line[0] == '#' || line[0] == '\0') {
+    return;
+  }
+
+  /* 分离 key 和 value */
+  separator = strchr(line, '=');// 查找第一次出现 “=” 的位置
+  if (separator == NULL) {
+    return; // 无效行
+  }
+  *separator = '\0'; // 将等号替换为字符串结束符，从而分离键和值
+  key = trim_whitespace(line);// 去除键的空白 
+  value = trim_whitespace(separator + 1);// 去除值的空白
+  if (*key == '\0' || *value == '\0') {
+    return; // 忽略键或值为空的行
+  }
+
+  /* 去除 value 的注释 */
+  char* comment = strchr(value, '#');
+  if (comment != NULL) {
+    *comment = '\0';
+  }
+
+ switch (map_key_to_enum(key)) {
+  /* --- 数值类型 --- */
+  case KEY_NUM_P:
+    config->num_p = atoi(value);
+    break;
+  case KEY_NUM_Q:
+    config->num_q = atoi(value);
+    break;
+  case KEY_NUM_C:
+    config->num_c = atoi(value);
+    break;
+  case KEY_NUM_SOURCE_MDT:
+    config->num_source_mdt = atoi(value);
+    break;
+  case KEY_NUM_SOURCE_OST:
+    config->num_source_ost = atoi(value);
+    break;
+  case KEY_NUM_TARGET_MDT:
+    config->num_target_mdt = atoi(value);
+    break;
+  case KEY_NUM_TARGET_OST:
+    config->num_target_ost = atoi(value);
+    break;
+  case KEY_CAP_RING:
+    config->cap_ring = atoi(value);
+    break;
+  case KEY_TIME_WRITE:
+    config->time_write = atoi(value);
+    break;
+  case KEY_TIME_READ:
+    config->time_read = atoi(value);
+    break;
+
+  /* --- 字符串类型 --- */
+  case KEY_SOURCE_PATH:
+    strncpy(config->source_path, value, MAX_PATH_LEN - 1);
+    config->source_path[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
+    break;
+  case KEY_TARGET_PATH:
+    strncpy(config->target_path, value, MAX_PATH_LEN - 1);
+    config->target_path[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
+    break;
+  }
+}
+/* 从指定的配置文件路径加载配置 */
+status_config_file_t load_config(config_env_t* config, const char* filepath_config) {
+  /* 打开配置文件 */
+  FILE* file = fopen(filepath_config, "r");
+  if (file == NULL) {// 文件不存在，使用默认值
+    fprintf(stderr, "Warning: Config file '%s' not found. Using default values.\n", filepath_config);
+    return CONFIG_ERROR_FILE_NOT_FOUND;
+  }
+  /* 逐行读取配置 */
+  char line[MAX_LEN_PATH];
+  while (fgets(line, sizeof(line), file)) {
+    parse_config_line(config, line);
+  }
+  /* 关闭配置文件 */
+  fclose(file);
+  return CONFIG_SUCCESS;
+}
+/* 计算 源集群 ost -> 队列所有者rank（多OST映射到少量Q） */
+bool ost_owner_rank(config_env_t* config){
+  /* 对每一个ost 计算该ost归哪个队列所有者 */
+  /* 采用轮询的方式分配 */
+  for(int i=0;i<config->NUM_SOURCE_OST;i++){
+    int idx = i % config->NUM_Q;
+    config->MAP_SOURCE_OST[i] = config->NUM_P + idx;
+  }
+  return true;
+}
+/* 广播配置到所有进程（由rank 0 发起） */
+void broadcast_config(config_env_t* config) {
+  
+  MPI_Bcast(config, sizeof(config_env_t), MPI_BYTE, 0, MPI_COMM_WORLD);
+}
+
+
 
 
 /*--------环形队列 ringq_t 相关接口--------*/
 /* 根据容量初始化队列 */
-static void rq_init(ringq_t* q, int cap) {
+status_rq_t rq_init(ringq_t* q, int cap) {
   q->buf = (task_t*)malloc(sizeof(task_t)*cap);
   q->capacity = cap; q->head=0; q->tail=0; q->size=0;
+  return RQ_SUCCESS;
 }
 /* 释放队列资源 */
-static void rq_free(ringq_t* q){ 
-    free(q->buf); q->buf=NULL; 
+status_rq_t rq_free(ringq_t* q){ 
+  free(q->buf); q->buf=NULL; 
+  return RQ_SUCCESS;
 }    
 /* 判断队列是否已满 */
-static int  rq_full(ringq_t* q){ 
+bool rq_full(ringq_t* q){ 
     return q->size==q->capacity; 
 }
 /* 判断队列是否为空 */
-static int  rq_empty(ringq_t* q){ 
+bool rq_empty(ringq_t* q){ 
     return q->size==0; 
 }
-/* 入队：成功返回1，失败返回0 */
-static int  rq_push(ringq_t* q, const task_t* t){
-  if (rq_full(q)) return 0;
-  q->buf[q->tail]=*t; q->tail=(q->tail+1)%q->capacity; q->size++; return 1;
+/* 入队：成功返回 RQ_SUCCESS，失败返回相应状态码 */
+status_rq_t rq_push(ringq_t* q, const task_t* t){
+  if (rq_full(q)) return RQ_ERROR_FULL;
+  q->buf[q->tail]=*t; q->tail=(q->tail+1)%q->capacity; q->size++; return RQ_SUCCESS;
 }
-/* 出队：成功返回1，失败返回0 */
-static int  rq_pop(ringq_t* q, task_t* t){
-  if (rq_empty(q)) return 0;
-  *t = q->buf[q->head]; q->head=(q->head+1)%q->capacity; q->size--; return 1;
+/* 出队：成功返回 RQ_SUCCESS，失败返回相应状态码 */
+status_rq_t rq_pop(ringq_t* q, task_t* t){
+  if (rq_empty(q)) return RQ_ERROR_EMPTY;
+  *t = q->buf[q->head]; q->head=(q->head+1)%q->capacity; q->size--; return RQ_SUCCESS;
 }
 
 
 /*-----进程角色分配与计算接口-------*/
 /*如果没有通过配置文件指定角色，则使用默认策略*/
-static int plan_roles(role_plan_t* rp,int rank,int world){
+bool plan_roles(const config_env_t* config, role_plan_t* rp,int rank,int world){
   // 默认策略：Q = min(num_ost, max(1, world/8)); P = max(1, (world - Q)/4); C = world - P - Q
-  // 可通过环境覆盖：PFS_NUM_P / PFS_NUM_Q / PFS_NUM_C
-  int envP=env_int("PFS_NUM_P",-1), envQ=env_int("PFS_NUM_Q",-1), envC=env_int("PFS_NUM_C",-1);
-  if (envP>0 && envQ>0 && envC>0 && envP+envQ+envC==world){
+  // 可通过配置文件覆盖：NUM_P / NUM_Q / NUM_C
+  int envP=config->NUM_P, envQ=config->NUM_Q, envC=config->NUM_C;
+  if (envP>0 && envQ>0 && envC>0 && envP+envQ+envC==world){// 如果配置文件由指定角色分配
     rp->numP=envP; rp->numQ=envQ; rp->numC=envC;
   }else{
     rp->numQ = rp->num_ost<world? rp->num_ost : (world>8? world/8:1);
@@ -65,20 +198,11 @@ static int plan_roles(role_plan_t* rp,int rank,int world){
   }else{
     rp->my_role = CONSUMER;
   }
-  
-  return 1;
+
+  return true;
 }
 
-/* 计算 源集群 ost -> 队列所有者rank（多OST映射到少量Q） */
-static int ost_owner_rank(role_plan_t* rp){
-  /* 对每一个ost 计算该ost归哪个队列所有者 */
-  /* 采用轮询的方式分配 */
-  for(int i=0;i<rp->num_ost;i++){
-    int idx = i % rp->numQ;
-    rp->ost_mapping[i] = rp->baseQ + idx;
-  }
-  return 1;
-}
+
 
 
 
