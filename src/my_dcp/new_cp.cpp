@@ -27,12 +27,18 @@ int main(int argc, char** argv){
     /* 初始化配置（rank 0 负责广播） */
     if( rank_world == 0){
         load_config(&config_env, config_file_path);// 加载配置文件
+        ost_owner_rank(&config_env);// 计算 ost -> 队列所有者rank 映射
         broadcast_config(&config_env);// 广播配置
     }
     MPI_Barrier(MPI_COMM_WORLD);// 同步所有进程，确保配置已广播完成
     
     /* 计算角色 */
     role_plan_t rp = plan_roles(&config_env, rank_world, size_world);
+    /* rank_world ==0 打印配置信息与角色分配情况 */
+    if( rank_world == 0){
+        print_config(&config_env);
+        print_role_plan(&rp);
+    }
     MPI_Barrier(MPI_COMM_WORLD);// 同步所有进程，确保各自的角色已分配完成
     /* COSPLAY */
 

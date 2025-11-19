@@ -25,8 +25,9 @@ static void emit_small_file_task(const char* path, uint64_t fsize, layout_t L, c
 
 /* 生成大文件分片任务 */
 static void emit_large_file_chunks(const char* path, uint64_t fsize, layout_t L, const prod_cfg_t* cfg);
+
 /* 任务队列初始化，只有 circle_global_rank==0 的进程才会执行*/
-static void producer_create(CIRCLE_handle* handle)
+static void producer_create(CIRCLE_handle* handle);
 
 /* Producer 主函数 */
 static void producer_main(role_plan_t* rp);

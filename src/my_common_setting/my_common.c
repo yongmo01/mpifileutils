@@ -133,8 +133,22 @@ void broadcast_config(config_env_t* config) {
   
   MPI_Bcast(config, sizeof(config_env_t), MPI_BYTE, 0, MPI_COMM_WORLD);
 }
-
-
+/* 打印当前配置内容（供调试使用） */
+void perint_config(const config_env_t* config) {
+  printf("Current Configuration:\n");
+  printf("NUM_P: %d\n", config->num_p);
+  printf("NUM_Q: %d\n", config->num_q);
+  printf("NUM_C: %d\n", config->num_c);
+  printf("SOURCE_PATH: %s\n", config->source_path);
+  printf("TARGET_PATH: %s\n", config->target_path);
+  printf("NUM_SOURCE_MDT: %d\n", config->num_source_mdt);
+  printf("NUM_SOURCE_OST: %d\n", config->num_source_ost);
+  printf("NUM_TARGET_MDT: %d\n", config->num_target_mdt);
+  printf("NUM_TARGET_OST: %d\n", config->num_target_ost);
+  printf("CAP_RING: %d\n", config->cap_ring);
+  printf("TIME_WRITE: %d ms/MB\n", config->time_write);
+  printf("TIME_READ: %d ms/MB\n", config->time_read);
+}
 
 
 /*--------环形队列 ringq_t 相关接口--------*/
@@ -201,7 +215,13 @@ bool plan_roles(const config_env_t* config, role_plan_t* rp,int rank,int world){
 
   return true;
 }
-
+/* 打印角色分配情况 */
+void print_role_plan(const role_plan_t* rp){
+  printf("Role Plan:\n");
+  printf("  Producers: %d (ranks %d to %d)\n", rp->numP, rp->baseP, rp->baseP + rp->numP - 1);
+  printf("  Queue Owners: %d (ranks %d to %d)\n", rp->numQ, rp->baseQ, rp->baseQ + rp->numQ - 1);
+  printf("  Consumers: %d (ranks %d to %d)\n", rp->numC, rp->baseC, rp->baseC + rp->numC - 1);
+}
 
 
 

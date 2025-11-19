@@ -3,10 +3,10 @@
 
 
 /* 将task发送到该OST队列所有者 */
-static void ssend_task_to_owner(const task_t* t, role_plan_t rp, int num_ost){
-  int dst = ost_owner_rank(t->layout.dominant_ost, rp, num_ost);
+static void ssend_task_to_owner(const task_t* t, role_plan_t rp){
+  int rank_dst = config_env.MAP_SOURCE_OST[t->layout.dominant_ost]; 
   // 同步发送：当队列所有者不接收或队列满时，发送阻塞，实现“反压”，避免无限膨胀
-  MPI_Ssend((void*)t, sizeof(task_t), MPI_BYTE, dst, TAG_TASK_PUT, MPI_COMM_WORLD);
+  MPI_Ssend((void*)t, sizeof(task_t), MPI_BYTE, rank_dst, TAG_TASK_PUT, MPI_COMM_WORLD);
 }
 
 /* 生成小文件任务 */
@@ -46,9 +46,38 @@ static void emit_large_file_chunks(const char* path, uint64_t fsize, layout_t L,
 /* 任务队列初始化，只有 circle_global_rank==0 的进程才会执行*/
 static void producer_create(CIRCLE_handle* handle){
   // 将源路径放入到任务队列中
-  handle->enqueue((char*)source_path);
+  handle->enqueue(config_env.PATH_SOURCE);
 }
+/* 每个生产者在从队列中获取一个路径的时候都会执行以下函数* /
+/* 如果该路径是目录，则遍历该目录的下的所有条目，并将其放回到队列中 */
+/* 如果该路径是文件，则将该文件包装成一个任务 */
+static void producer_process(CIRCLE_handle* handle){
+  /* 从队列中获取待遍历目录/文件 路径 */
+  char path[MAX_LEN_PATH];
+  handle->dequeue(path);
+  mfu_file_t* mfu_file = *CURRENT_PFILE;
 
+  /* 获取该文件/目录 的元数据 */
+  struct stat st;
+  int status;
+  status = mfu_file_lstat(path, &st, mfu_file);//假设不考虑链接，只考虑符号链接本身的信息
+  if (status != 0) {//如果获取元数据失败
+    MFU_LOG(MFU_LOG_ERR, "Failed to stat: '%s' (errno=%d %s)",
+    path, errno, strerror(errno));
+    WALK_RESULT = -1;
+    return;
+  }
+
+  /* increment our item count */
+  reduce_items++;
+
+  if (S_ISDIR(st.st_mode)) {// 如果该路径是目录 
+      
+  }else{// 如果该路径是文件。大文件进行切片
+
+  }
+  return;
+}
 /* Producer 主函数 */
 static void producer_main(role_plan_t* rp){
     /* 初始化配置 */

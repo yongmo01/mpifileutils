@@ -5,6 +5,7 @@
 
 /* 引用 mpiFileUtils 的头文件 */
 #include "libcircle.h"
+#include "mfu.h"
 
 /* 文件布局头文件 */
 #include "layout_aware.h"
@@ -95,7 +96,12 @@ bool ost_owner_rank(config_env_t* config);
  * @param config 指向配置结构体的指针。在 rank 0 上是输入，在其他rank上是输出。
  */
 status_config_file_t broadcast_config(env_config_t* config);
-
+/**
+ * @brief 打印当前配置内容（供调试使用）。
+ *
+ * @param config 指向配置结构体的指针。
+ */
+void print_config(const config_env_t* config);
 
 /*--------任务 task_t 声明-------- */
 typedef enum { TASK_SMALL_BATCHABLE=1, TASK_LARGE_STRIPED_CHUNK=2 } task_kind_t;
@@ -144,8 +150,6 @@ status_rq_t rq_pop(ringq_t* q, task_t* t);
 
 
 
-
-
 /*-----进程角色分配与计算接口-------*/
 /* 进程角色枚举 */
 typedef enum { PRODUCER=1, QUEUE_OWNER=2, CONSUMER=3 } role;
@@ -164,7 +168,8 @@ typedef struct {
 /* 成功返回 true ;失败返回 false */
 /*-------TODO:修改返回值----*/
 bool plan_roles(role_plan_t* rp,int rank,int world);
-
+/* 打印角色分配情况 */
+void print_role_plan(const role_plan_t* rp);
 
 
 
