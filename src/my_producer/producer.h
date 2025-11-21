@@ -7,15 +7,12 @@
 // ---------- Producer：遍历 + 任务生成 + 同步发送到对应队列Owner（队列满则阻塞=反压） ----------
 /* Producer 配置参数 */
 typedef struct {
-  const char* root;
   int me, numP, myPIndex;// me=rank;numP=总Producer数;myPIndex=rank-baseP（逻辑上第几个Producer）
-  int num_ost;
-  int small_thresh;     // <= 128KB 等视为小文件
-  int stripe_sz;        // 默认条带大小（假布局）
-  int stripe_cnt;       // 默认条带数（假布局）
-  int chunk_mb;         // 大文件分片MB，按条带对齐
-  role_plan_t rp;
+  task_batch_t* batches;// 每个OST对应的批处理缓冲区数组指针
 } prod_cfg_t;
+extern prod_cfg_t prod_cfg;// 全局生产者配置变量
+/* 生产者配置初始化 */
+static void prod_cfg_init(prod_cfg_t* cfg);
 
 /* 将task发送到该OST队列所有者 */
 static void ssend_task_to_owner(const task_t* t, role_plan_t rp, int num_ost);

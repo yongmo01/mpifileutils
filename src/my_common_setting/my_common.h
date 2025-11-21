@@ -17,6 +17,8 @@
 /* 宏定义 */
 #define MAX_NUM_OST 512  // 假设最大支持512个OST
 #define MAX_LEN_PATH 4096 // 为字符串路径定义一个最大长度
+#define TAG_TASK_PUT 1 // 单个任务的Tag
+#define TAG_TASK_BATCH_PUT 2 // 批量任务的Tag
 
 /*----环境配置 env_config_t 声明-------*/
 typedef struct {
@@ -42,6 +44,9 @@ typedef struct {
   uint32_t CAP_RING;
   int MAP_SOURCE_OST[MAX_NUM_OST];  // 记录每个ost对应的队列所有者rank
 
+  /* 任务与批处理配置 */
+  uint32_t STRIPES_PER_CHUNK;    
+  uint32_t MAX_TASKS_PER_BATCH;  
   /* 模拟I/O耗时配置 (单位: 毫秒/MB) */
   uint32_t TIME_WRITE;
   uint32_t TIME_READ;
@@ -103,19 +108,25 @@ status_config_file_t broadcast_config(env_config_t* config);
  */
 void print_config(const config_env_t* config);
 
-/*--------任务 task_t 声明-------- */
+/*--------任务 task_t 声明---------*/
 typedef enum { TASK_SMALL_BATCHABLE=1, TASK_LARGE_STRIPED_CHUNK=2 } task_kind_t;
 typedef struct {
-  task_kind_t kind;
-  char  path[1024];                  // 路径（简化：限制长度）
+  /* 任务基本信息 */
+  char  path[MAX_LEN_PATH];                  // 路径（简化：限制长度）
   uint64_t size;                     // 小文件：文件大小；分片：chunk大小
-  uint64_t offset;                  // 小文件：0；分片：chunk起始偏移
-  mfu_file_layout_t layout;         // 条带/主导信息
+  uint64_t offset;                  // 起始位置
+  uint64_t stripe_size;             // 条带大小（读取的粒度）
+  uint64_t stripe_step;             // 条带步长（条带数*条带大小）
+   
+  /* maybe  */
+  char 
   char  pack_key[256];               // 小文件聚合键（目录+OST），此原型未在消费者端打包，仅示意
-  uint32_t flags;                    // 例如 CHUNK_ALIGN_TO_STRIPE = 1
-  uint32_t md_ops_hint;              // 估算元数据操作数
 } task_t;
-
+/*--------任务批次 task_batch_t 声明-------- */
+typedef struct {
+    uint32_t count; // 当前批次中的任务数量
+    task_t tasks[config_env.MAX_TASKS_PER_BATCH]; // 存储任务的数组
+} task_batch_t;
 
 /*--------环形队列（用于存放task_t） ringq_t 声明-------- */
 /* 简易环形队列（队列所有者rank内部使用；单线程访问，无锁） */

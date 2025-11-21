@@ -60,44 +60,50 @@ static void parse_config_line(config_env_t* config, char* line) {
  switch (map_key_to_enum(key)) {
   /* --- 数值类型 --- */
   case KEY_NUM_P:
-    config->num_p = atoi(value);
+    config->NUM_P = atoi(value);
     break;
   case KEY_NUM_Q:
-    config->num_q = atoi(value);
+    config->NUM_Q = atoi(value);
     break;
   case KEY_NUM_C:
-    config->num_c = atoi(value);
+    config->NUM_C = atoi(value);
     break;
   case KEY_NUM_SOURCE_MDT:
-    config->num_source_mdt = atoi(value);
+    config->NUM_SOURCE_MDT = atoi(value);
     break;
   case KEY_NUM_SOURCE_OST:
-    config->num_source_ost = atoi(value);
+    config->NUM_SOURCE_OST = atoi(value);
     break;
   case KEY_NUM_TARGET_MDT:
-    config->num_target_mdt = atoi(value);
+    config->NUM_TARGET_MDT = atoi(value);
     break;
   case KEY_NUM_TARGET_OST:
-    config->num_target_ost = atoi(value);
+    config->NUM_TARGET_OST = atoi(value);
     break;
   case KEY_CAP_RING:
-    config->cap_ring = atoi(value);
+    config->CAP_RING = atoi(value);
+    break;
+  case KEY_STRIPES_PER_CHUNK:
+    config->STRIPES_PER_CHUNK = atoi(value);
+    break;
+  case KEY_MAX_TASKS_PER_BATCH:
+    config->MAX_TASKS_PER_BATCH = atoi(value);
     break;
   case KEY_TIME_WRITE:
-    config->time_write = atoi(value);
+    config->TIME_WRITE = atoi(value);
     break;
   case KEY_TIME_READ:
-    config->time_read = atoi(value);
+    config->TIME_READ = atoi(value);
     break;
 
   /* --- 字符串类型 --- */
   case KEY_SOURCE_PATH:
-    strncpy(config->source_path, value, MAX_PATH_LEN - 1);
-    config->source_path[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
+    strncpy(config->PATH_SOURCE, value, MAX_PATH_LEN - 1);
+    config->PATH_SOURCE[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
     break;
   case KEY_TARGET_PATH:
-    strncpy(config->target_path, value, MAX_PATH_LEN - 1);
-    config->target_path[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
+    strncpy(config->PATH_TARGET, value, MAX_PATH_LEN - 1);
+    config->PATH_TARGET[MAX_PATH_LEN - 1] = '\0'; // 确保空字符结尾
     break;
   }
 }
