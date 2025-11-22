@@ -83,8 +83,8 @@ static void parse_config_line(config_env_t* config, char* line) {
   case KEY_CAP_RING:
     config->CAP_RING = atoi(value);
     break;
-  case KEY_STRIPES_PER_CHUNK:
-    config->STRIPES_PER_CHUNK = atoi(value);
+  case KEY_STRIPES_PER_TASK:
+    config->STRIPES_PER_TASK = atoi(value);
     break;
   case KEY_MAX_TASKS_PER_BATCH:
     config->MAX_TASKS_PER_BATCH = atoi(value);

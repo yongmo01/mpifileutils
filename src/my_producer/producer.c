@@ -10,6 +10,14 @@ static void prod_cfg_init(prod_cfg_t* cfg){
     MFU_LOG(MFU_LOG_ERR, "Failed to allocate memory for task batches.");
     return;
   }
+  for(int i=0;i<config_env.NUM_SOURCE_OST;++i){
+    batches[i].count = 0;
+    batches[i].tasks = (task_t*)calloc(config_env.MAX_TASKS_PER_BATCH, sizeof(task_t));
+    if (batches[i].tasks == NULL) {
+      MFU_LOG(MFU_LOG_ERR, "Failed to allocate memory for tasks in batch %d.", i);
+      return;
+    }
+  }
   return ;
 }
 
@@ -21,7 +29,7 @@ static void ssend_task_to_owner(const task_t* t, role_plan_t rp){
 }
 
 /* 生成小文件任务 */
-static void emit_small_file_task(const char* path, uint64_t fsize, layout_t L, const prod_cfg_t* cfg){
+static void emit_small_file_task(const char* path, uint64_t fsize, mfu_file_layout_t* L){
   task_t t={0};
   t.kind = TASK_SMALL_BATCHABLE;
   snprintf(t.path, sizeof(t.path), "%s", path);
@@ -34,74 +42,55 @@ static void emit_small_file_task(const char* path, uint64_t fsize, layout_t L, c
   ssend_task_to_owner(&t, cfg->rp, cfg->num_ost);
 }
 
-/* 生成大文件分片任务 */
-static void emit_large_file_chunks(const char* path, uint64_t fsize, layout_t L){
-// ... (之前的函数保持不变) ...
-
 /* 
- * (重写) 生成大文件分片任务，严格按照Lustre条带布局进行切分和批量发送 
+ * 生成大文件分片任务，严格按照Lustre条带布局进行切分和批量发送 
  */
-static void emit_large_file_chunks(const char* path, uint64_t fsize, mfu_file_layout_t* L, const prod_cfg_t* cfg) {
+static void emit_large_file_chunks(const char* path, uint64_t fsize, mfu_file_layout_t* L) {
   /* 关键参数检查 */
   if (L == NULL || L->stripe_size <= 0 || L->stripe_count <= 0) { // 检查文件布局信息是否有效 
     MFU_LOG(MFU_LOG_ERR, "Invalid Lustre layout for file '%s'. Cannot generate chunks.", path); // 记录无效布局的错误日志 
     return; // 如果布局无效，则直接返回，不处理此文件 
   }
+
+  /* 获取该文件的文件布局 */
   uint64_t stripe_size = L->stripe_size; // 获取文件的条带大小 
-  int stripe_count = L->stripe_count; // 获取文件的条带数量（即OST数量） 
-  /* 遍历文件中的每一个条带 */
-    for (uint64_t stripe_index = 0; ; ++stripe_index) { // 无限循环，直到文件末尾 // 注释
-        // --- (3) 计算当前条带在哪个OST上 (轮询布局) ---
-        int ost_index_on_file = stripe_index % stripe_count; // 使用取模运算实现轮询 // 注释
-        int ost_id = L->ost_ids[ost_index_on_file]; // 从布局信息中获取该OST的真实ID // 注释
-
-        // --- (5) 计算当前条带在文件中的起始偏移量 ---
-        uint64_t current_offset = stripe_index * stripe_size; // 当前条带的起始偏移量 // 注释
-
-        // --- (5) 边界条件：检查是否已超出文件大小 ---
-        if (current_offset >= fsize) { // 如果计算出的偏移量已经等于或超过文件大小 // 注释
-            break; // 说明所有条带都已处理完毕，跳出循环 // 注释
-        }
-
-        // --- (5) 边界条件：计算当前条带的实际大小 ---
-        uint64_t current_size = stripe_size; // 默认情况下，条带大小就是配置的stripe_size // 注释
-        if (current_offset + stripe_size > fsize) { // 如果这是文件的最后一个、不完整的条带 // 注释
-            current_size = fsize - current_offset; // 则其实际大小是文件剩余的部分 // 注释
-        }
-
-        // --- 创建一个代表此条带的任务 ---
-        task_t t = {0}; // 初始化任务结构体为零 // 注释
-        t.kind = TASK_LARGE_STRIPED_CHUNK; // 标记任务类型为大文件条带块 // 注释
-        snprintf(t.path, sizeof(t.path), "%s", path); // 复制文件路径到任务中 // 注释
-        t.size = current_size; // 设置任务的大小为当前条带的实际大小 // 注释
-        t.offset = current_offset; // 设置任务的偏移量为当前条带的起始偏移量 // 注释
-        t.layout = *L; // 复制整个文件布局信息到任务中 // 注释
-        t.layout.dominant_ost = ost_id; // (4) 明确指定此任务归属于哪个OST // 注释
-
-        // --- (1) 将任务放入对应OST所有者的批处理缓冲区 ---
-        int rank_dst = ost_owner_rank(&cfg->rp, ost_id); // 计算负责此OST的队列所有者的rank // 注释
-        task_batch_t* batch = &batches[rank_dst]; // 获取对应rank的批处理缓冲区指针 // 注释
-
-        batch->tasks[batch->count] = t; // 将新创建的任务复制到缓冲区中 // 注释
-        batch->count++; // 增加该缓冲区的任务计数 // 注释
-
-        // --- 检查缓冲区是否已满，如果满了就发送 ---
-        if (batch->count == MAX_TASKS_PER_BATCH) { // 如果缓冲区中的任务数达到了批次上限 // 注释
-            ssend_task_batch_to_owner(batch, rank_dst); // 调用批量发送函数发送这一整批任务 // 注释
-        }
+  uint32_t stripe_count = L->stripe_count; // 获取文件的条带数量（即OST数量） 
+  /* 遍历文件中的每一组（每一组包含条带数 = OST数量 * 每个任务的条带数） */
+  for(uint64_t index_group = 0; ; ++index_group) { // 无限循环，直到文件末尾
+    /* 计算当前组起始位置在文件中的偏移量，并检查是否超过文件大小 */
+    uint64_t  offset_current_group = index_group * stripe_count * config_env.STRIPES_PER_TASK * stripe_size;// 文件偏移起点 = 组索引 * 每组大小（OST数量 * 每个任务的条带数 * 条带大小）
+    if(offset_current_group >= fsize) { // 如果当前组的起始偏移量已经超过文件大小 
+      break; // 说明所有数据块都已处理完毕，跳出循环 
     }
+    uint32_t max_lenth = config_env.STRIPES_PER_TASK;//
+    /* 将该组按照OST进行拆分成不同的部分，每个部分视为一个任务，放入到对应的OST批处理队列中，队列满则发送 */
+    for(uint32_t id_ost = 0;id_ost < stripe_count ; id_ost++){
+      uint64_t offset_current_task = offset_current_group + id_ost * L->stripe_size;// 计算该OST对应的任务起始偏移量
+      if(offset_current_task >= fsize) { // 如果该任务的起始偏移量已经超过文件大小 
+        break; // 跳过该任务，继续处理下一个OST 
+      }
+      /* 计算该任务的大小（考虑文件结尾情况）*/
+      uint64_t max_task_size = config_env.STRIPES_PER_TASK * L->stripe_size; // 计算该任务的最大可能大小
+      uint64_t remaining_size = fsize - offset_current_task; // 计算从当前偏移量到文件末尾的剩余大小
+      uint64_t task_size = (remaining_size < max_task_size) ? remaining_size : max_task_size; // 任务大小为剩余大小与最大可能大小的较小值
+      /* 制作任务 */
+      task_t task={0};
+      strncpy(task.path, path, sizeof(task.path));
+      task.size = task_size;
+      task.offset = offset_current_task;
+      if(task_size == max_task_size){// 如果任务完整
+        task.is_logically_contiguous = false;
+        task.stripe_size = L->stripe_size;
+        task.stripe_step = L->stripe_count;
+      }else{// 如果任务不完整（边界条件）,则直接逻辑连续到底
+        task.is_logically_contiguous = true;
 
-    // --- 收尾工作：发送所有剩余的、未满的批次 ---
-    for (int i = 0; i < world_size; i++) { // 遍历所有可能的rank // 注释
-        if (batches[i].count > 0) { // 如果某个rank的缓冲区中还有未发送的任务 // 注释
-            ssend_task_batch_to_owner(&batches[i], i); // 将这个剩余的批次发送出去 // 注释
-        }
+        break;//后续的任务都不需要创建
+      }// 如果任务大小
     }
+  } 
+}
 
-    free(batches); // 释放为批处理缓冲区动态分配的内存 // 注释
-}
-..
-}
 /* 任务队列初始化，只有 circle_global_rank==0 的进程才会执行*/
 static void producer_create(CIRCLE_handle* handle){
   // 将源路径放入到任务队列中

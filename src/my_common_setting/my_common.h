@@ -45,7 +45,7 @@ typedef struct {
   int MAP_SOURCE_OST[MAX_NUM_OST];  // 记录每个ost对应的队列所有者rank
 
   /* 任务与批处理配置 */
-  uint32_t STRIPES_PER_CHUNK;    
+  uint32_t STRIPES_PER_TASK;    
   uint32_t MAX_TASKS_PER_BATCH;  
   /* 模拟I/O耗时配置 (单位: 毫秒/MB) */
   uint32_t TIME_WRITE;
@@ -100,7 +100,7 @@ bool ost_owner_rank(config_env_t* config);
  *
  * @param config 指向配置结构体的指针。在 rank 0 上是输入，在其他rank上是输出。
  */
-status_config_file_t broadcast_config(env_config_t* config);
+status_config_file_t broadcast_config(config_env_t* config);
 /**
  * @brief 打印当前配置内容（供调试使用）。
  *
@@ -116,16 +116,16 @@ typedef struct {
   uint64_t size;                     // 小文件：文件大小；分片：chunk大小
   uint64_t offset;                  // 起始位置
   uint64_t stripe_size;             // 条带大小（读取的粒度）
-  uint64_t stripe_step;             // 条带步长（条带数*条带大小）
-   
+  uint32_t stripe_step;             // 条带步长（OST的个数），用于跳着读
+  bool is_logically_contiguous;//表示该任务是否涉及文件尾部，即逻辑连续
   /* maybe  */
-  char 
+  
   char  pack_key[256];               // 小文件聚合键（目录+OST），此原型未在消费者端打包，仅示意
 } task_t;
 /*--------任务批次 task_batch_t 声明-------- */
 typedef struct {
     uint32_t count; // 当前批次中的任务数量
-    task_t tasks[config_env.MAX_TASKS_PER_BATCH]; // 存储任务的数组
+    task_t* tasks; // 存储任务的数组
 } task_batch_t;
 
 /*--------环形队列（用于存放task_t） ringq_t 声明-------- */

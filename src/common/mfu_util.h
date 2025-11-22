@@ -26,10 +26,10 @@ extern "C" {
 #if defined(__APPLE__)
 #include "machine/endian.h"
 #else
-#include "endian.h"
+//"lhylhy"#include "endian.h"
 #endif
 
-#include "byteswap.h"
+//"lhylhy"#include "byteswap.h"
 
 #include "mfu_progress.h"
 

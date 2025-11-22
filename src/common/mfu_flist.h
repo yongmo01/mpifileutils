@@ -45,7 +45,7 @@ extern "C" {
 #include "mpi.h"
 
 /* 我的修改 */
-#include "mfu_layout.h"
+#include "layout_aware.h"
 
 #if DCOPY_USE_XATTRS
 #include <sys/xattr.h>

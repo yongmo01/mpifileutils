@@ -263,7 +263,7 @@
       * Figure out which compiler is being invoked (in order to compare if
       * it was different than what OMPI was built with).
       */
-#    include "mpi_portable_platform.h"
+//"lhylhy"#    include "mpi_portable_platform.h"
 
      /*
       * If we're currently using the same compiler that was used to
